@@ -6,13 +6,13 @@ discussions-to: https://ethereum-magicians.org[]
 status: Draft
 type: Standards Track
 category: Core
-created: 2024-09-
+created: 2024-09-04
 ---
 
 ## Abstract
 
 This EIP introduces changes to the EVM, making it recognize Multiple Native Assets (MNAs). ETH is made one of the Native Assets (NAs), while retaining its unique status in terms of how it is minted/burned, as well as remaining the only Native Asset (NA) that can be used to pay for EVM gas. 
-`MINT` and `BURN` opcodes are introduced to control the supply of NAs. The `CALL` and `CALLCODE`, `CREATE` and `CREATE2`, `BALANCE` and `CALLVALUE` opcodes are adapted to support NAs transfer, the NA-infused contract creation and the querying of the NAs-related information, respectively.
+The `MINT`, `BURN` and `BALANCES` opcodes are introduced to control the supply of NAs and query one's NAs balance. The `CALL` and `CALLCODE`, `CREATE` and `CREATE2`, `BALANCE`, `SELFBALANCE` and `CALLVALUE` opcodes are adapted to support NAs transfer, the NA-infused contract creation and the querying of the NAs-related information, respectively.
 The `data` field of the transaction structure is adapted to support a collection of (`asset_id`, `asset_amount`) pairs.
 
 ## Motivation
@@ -41,31 +41,75 @@ The introduction of MNAs into the EVM addresses several limitations and ineffici
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in RFC 2119 and RFC 8174.
 
-A global `token_id` -> `token_supply` mapping is introduced, to keep track of the existing NAs and their circulating supply. The supply of a NA is increased during the execution of the `MINT` opcode - and decreased during the execution of its `BURN` counterparty.
+A global `token_id` -> `token_supply` mapping is introduced, to keep track of the existing NAs and their circulating supply. The supply of a NA is increased during the execution of the `MINT` opcode - and decreased during the execution of its `BURN` counterparty. The `token_id` of a NA is the Ethereum address of its associated smart contract. This mapping is also being used to validate the supported NAs (a NA is supported iff its id can be found in the mapping).
 
 `ETH` becomes the "Base Asset" with the id and supply both equal to 0. `ETH` is the only NA with its supply not being tracked explicitly (i.e. the `ETH` supply is being determined just like it currently is).
 
-The addition of new NAs is being decided via a consensus expressed by the ETH validators. For security and consistency reasons, the smart contracts representing the NAs MUST NOT be mutable/upgradeable.
+The addition of new NAs is being decided via a consensus expressed by the ETH validators. For security and consistency reasons, the smart contracts representing the NAs MUST NOT be mutable/upgradeable. A smart contract MUST contain the "supply logic" **complete** and based **solely** on the `MINT` and `BURN` opcodes in order to be considered for being added as a NA.
 
 ### New Opcodes
 
-#### `MINT`
+#### `MINT` - `0xb0`
+##### Gas: TBD
+##### Stack inputs:
+        - `recipient` (the address that the minted assets will be credited to)
+        - `amount`
+##### Stack outputs:
+        - `success`
 
-#### `BURN`
 
-### Modified Opcodes
+#### `BURN` - `0xb1`
+##### Gas: TBD
+##### Stack inputs:
+        - `burner` (the address that the minted assets will be debited/burned from)
+        - `amount`
+##### Stack outputs:
+        - `success`
+
+#### `BALANCES` - `0xb2`
+##### Gas: Dynamic, as a factor of the number of NAs owned by the queried account
+##### Stack inputs:
+        - `account` (the address the NA holdings of which are being queried)
+##### Stack outputs:
+        - the list of (`token_id`, `amount`) pairs, representing the NAs balances of the queried account
+
+### Changes to The Existing Opcodes
 
 #### `CALL`
+##### Gas: Dynamic, as a factor of the transferred NAs number
+##### Stack inputs:
+        - `value` is replaced by `values`, containing a list of (`token_id`, `amount`) pairs
 
 #### `CALLCODE`
+##### Gas: Dynamic, as a factor of the transferred NAs number
+##### Stack inputs:
+        - `value` is replaced by `values`, containing a list of (`token_id`, `amount`) pairs
 
 #### `CREATE`
+##### Gas: Dynamic, as a factor of the transferred NAs number
+##### Stack inputs:
+        - `value` is replaced by `values`, containing a list of (`token_id`, `amount`) pairs
 
 #### `CREATE2`
+##### Gas: Dynamic, as a factor of the transferred NAs number
+##### Stack inputs:
+        - `value` is replaced by `values`, containing a list of (`token_id`, `amount`) pairs
 
 #### `BALANCE`
+##### Stack inputs:
+        - `token_id` (the id of the NA the balance of which is being queried)
+
+#### `SELFBALANCE`
+##### Name: `SELFBALANCES`
+##### Gas: Dynamic, as a factor of the number of NAs owned by the executing account
+##### Stack outputs:
+        - the list of (`token_id`, `amount`) pairs, representing the NAs balances of the account
 
 #### `CALLVALUE`
+##### Name: `CALLVALUES`
+##### Gas: Dynamic, as a factor of the number of NAs transferred by the executing CALL
+##### Stack outputs:
+        - the list of (`token_id`, `amount`) pairs, representing the NAs transferred by the executing CALL
 
 ### Transaction structure
 
