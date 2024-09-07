@@ -122,13 +122,18 @@ The `value` field in the transaction structure is renamed to `transferred_assets
 
 ## Rationale
 
-<!--
-  The rationale fleshes out the specification by describing what motivated the design and why particular design decisions were made. It should describe alternate designs that were considered and related work, e.g. how the feature is supported in other languages.
--->
+An alternative to the proposed opcode-based approach was the Precompile-based approach, which presents the following advantages:
+  - No new opcodes would need to be introduced.
+  - Existing EVM opcodes would remain unchanged.
+  - As a result, no modifications to smart contract languages (that compile into EVM opcodes) would be required.
 
-- the global mapping
-- opcodes vs precompile
-- the `BALANCES` opcode vs w/o it
+However, the Precompile-based approach also introduces several disadvantages:
+  - The minting, burning, transferring and balance checking of NAs would be more complicated for end users, as the complexity could not be abstracted through smart contract languages.
+  - Users would need to handle low-level data manipulations to encode inputs for Precompile functions and decode their outputs.
+  - Transferring NAs while calling contract functions would require encoding not only the NA data but also the function selector and the arguments for that function.
+  - Transferring multiple NAs in a single transaction would further complicate these operations.
+
+Considering the balance of these pros and cons, the opcode-based approach was chosen for its simplicity and efficiency in handling NAs at the EVM level.
 
 ## Backwards Compatibility
 
