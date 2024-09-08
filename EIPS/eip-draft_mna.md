@@ -137,18 +137,11 @@ Considering the balance of these pros and cons, the opcode-based approach was ch
 
 ## Backwards Compatibility
 
-<!--
+The changes introduced by this EIP affect existing systems that rely on the `value` field in the transaction structure or any of the modified opcodes.
 
-  This section is optional.
+Front-end Ethereum libraries (e.g. web3js, wagmi) need to adapt to the new transaction structure. At the same time, smart contract languages (e.g. Solidity, Vyper) need to adapt to the changed opcodes - and add support for the newly introduced opcodes. Ethereum wallets, explorers and development tools will require updates to support MNAs.
 
-  All EIPs that introduce backwards incompatibilities must include a section describing these incompatibilities and their severity. The EIP must explain how the author proposes to deal with these incompatibilities. EIP submissions without a sufficient backwards compatibility treatise may be rejected outright.
-
-  The current placeholder is acceptable for a draft.
-
-  TODO: Remove this comment before submitting
--->
-
-No backward compatibility issues found.
+The authors recommend providing extended development time and offering reference implementations to help ease the transition for developers of these tools and services.
 
 ## Test Cases
 
