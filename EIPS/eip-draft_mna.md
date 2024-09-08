@@ -6,7 +6,7 @@ discussions-to: https://ethereum-magicians.org[]
 status: Draft
 type: Standards Track
 category: Core
-created: 2024-09-04
+created: 2024-09-09
 ---
 
 ## Abstract
@@ -156,15 +156,32 @@ The authors recommend providing extended development time and offering reference
 
 ## Security Considerations
 
-<!--
-  All EIPs must contain a section that discusses the security implications/considerations relevant to the proposed change. Include information that might be important for security discussions, surfaces risks and can be used throughout the life cycle of the proposal. For example, include security-relevant design decisions, concerns, important discussions, implementation-specific guidance and pitfalls, an outline of threats and risks and how they are being addressed. EIP submissions missing the "Security Considerations" section will be rejected. An EIP cannot proceed to status "Final" without a Security Considerations discussion deemed sufficient by the reviewers.
+This EIP introduces several security risks related to gas handling, malicious assets and system integrity. Below are the key considerations and how they are mitigated.
 
-  The current placeholder is acceptable for a draft.
+1. Gas Accounting for NAs-related Opcodes
+Opcodes dealing with MNAs (e.g. `MINT`, `BURN`, `BALANCES`) must charge gas proportionate to the number of NAs involved. Otherwise, attackers could exploit the system by executing operations on many NAs, leading to potential DDoS attacks.
 
-  TODO: Remove this comment before submitting
--->
+Mitigation: Gas costs are dynamically adjusted based on the number of processed NAs, ensuring that operations scale in cost alongside the transaction complexity.
 
-Needs discussion.
+2. Malicious or Misbehaving Native Assets
+An asset that becomes a Native Asset (NA) may later behave maliciously, causing disruptions in the network.
+
+Mitigation: A governance mechanism allows validators to vote on removing misbehaving NAs. Only immutable, non-upgradeable contracts can become NAs, reducing the risk of post-approval issues.
+
+3. Supply Control Risks
+The `MINT` and `BURN` opcodes introduce potential risks of improper asset creation or destruction, which could lead to inflation or deflation of an asset’s supply.
+
+Mitigation: Only the NAs are allowed to execute the `MINT` and `BURN` opcodes - and exclusively to control their own supply.
+
+4. Cross-Contract NA Transfers
+Inter-contract NAs transfers could lead to vulnerabilities if contracts are not properly equipped to handle multiple assets.
+
+Mitigation: Contracts must validate asset transfers correctly, with guidance for developers on standard patterns to ensure safe cross-contract interactions.
+
+5. Governance and Validator Consensus
+Validator voting on adding or removing NAs introduces potential risks of governance attacks or collusion.
+
+Mitigation: Safeguards such as quorum requirements and transparent voting processes will help prevent governance manipulation. Auditable records of decisions will ensure accountability.
 
 ## Copyright
 
