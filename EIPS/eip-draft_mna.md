@@ -1,187 +1,246 @@
 ---
-title: Multiple Native Assets
-description: Introduces Multiple Assets, recognized by the VM alongside ETH
+title: Multiple Native Tokens
+description:
+  Introduces Multiple Native Tokens, with balances stored in the global VM state and support for NT transfers in EVM
+  opcodes
 author: Paul Razvan Berg (@PaulRBerg), Iaroslav Mazur (@IaroslavMazur)
 discussions-to: https://ethereum-magicians.org[]
 status: Draft
 type: Standards Track
 category: Core
-created: 2024-09-09
+created: TBD
 ---
 
 ## Abstract
 
-This EIP introduces changes to the EVM, making it recognize Multiple Native Assets (MNAs). ETH becomes one of the Native Assets (NAs), while retaining its unique status in terms of how it is minted/burned, as well as remaining the only Native Asset (NA) that can be used to pay for EVM gas. 
-The `MINT`, `BURN` and `BALANCES` opcodes are introduced to control the supply of NAs and query an account's NAs balance. The `CALL` and `CALLCODE`, `CREATE` and `CREATE2`, `BALANCE`, `SELFBALANCE` and `CALLVALUE` opcodes are adapted to support the transfer of NAs, NA-infused contract creation and querying NA-related information, respectively.
-The `value` field in transaction structure is adapted to support a collection of (`asset_id`, `asset_amount`) pairs.
+TODO: rewrite this at the end
+
+This EIP introduces significant changes to the EVM in order to make it recognize Multiple Native Tokens (MNTs, or just
+NTs) and foster innovation in L2s. The balances of these NTs are stored in the global VM state, and ETH becomes one of
+the NTs while retaining its unique status of the only NT that can be used to pay for EVM gas. The `MINT`, `BURN`,
+`BALANCEOF`, and `CALLVALUES` opcodes are introduced to control the supply of NTs and query an account's NT balances.
+The `CALL2`, `DELEGATECALL2`, `CALLCODE2`, `NTCREATE`, `NTCREATE2` opcodes are introduced to handle the transfer of NTs
+and NT-infused contract creation, respectively. Existing opcodes and transactions are adapted to refer to the default
+NT, which is `ETH`. A new transaction type is introduced in which the `value` field is replaced with a collection of
+(`token_id`, `token_amount`) pairs.
 
 ## Motivation
 
-The addition of MNAs to the EVM addresses several limitations and inefficiencies present in the current Ethereum architecture, where ETH is the sole native asset. While ETH has historically served as the foundation for gas payments and the primary store of value within the ecosystem, the expanding complexity of decentralized applications, decentralized finance protocols and cross-chain integrations has highlighted the need for a more versatile native asset system. Here are some of the main advantages of implementing MNAs in Ethereum:
+Implementing Multiple Native Tokens in the EVM offers several compelling advantages over traditional ERC-20 smart
+contracts, fostering innovation and improving user experience.
 
-  ### Enhanced Flexibility and User Experience
+### Native Support for Financial Instruments
 
-    As Ethereum continues to grow, dApps and protocols increasingly require specialized economic models that leverage native assets. Currently, developers must create  and manage custom tokens via ERC standards, which are less efficient and more complex (read: "unreasonable") to integrate natively into the EVM. MNAs allow for the direct support of diverse native assets within the EVM itself, simplifying development and enabling new types of applications, such as native stablecoins, governance tokens and protocol-specific assets.
+Storing token balances in the VM state unlocks the potential for sophisticated financial instruments to be implemented
+at the protocol level. This native integration facilitates features such as recurring payments and on-chain incentives
+without the need for complex smart contract interactions. For instance, platforms could natively provide yield to token
+holders or execute airdrops natively, similar to how rollups like Blast offer yield for ETH holders. Extending this
+capability to any token enhances utility and encourages users to engage more deeply with the network.
 
-  ### Support for DeFi and Financial Innovation
+### Elimination of Two-Step "Approve" and "Transfer"
 
-    #### Native Support for Financial Instruments
+By embedding token balances into the VM state, the cumbersome process of approving tokens before transferring them is
+eliminated. Token transfers can be seamlessly included within smart contract calls, simplifying transaction flows and
+reducing the number of steps users must take. This streamlined process not only enhances the user experience but also
+reduces gas costs associated with multiple contract calls, making interactions more efficient and cost-effective.
 
-      DeFi protocols depend heavily on a variety of assets, such as stablecoins and derivative tokens. Natively supporting these assets within the EVM improves their usability, boosts performance and eliminates the need for complex workarounds. This support increases the efficiency of liquidity provision, trading and collateralization mechanisms, all of which are vital for the continued innovation of DeFi.
+### Encouraging Experimentation on Layer 2 Solutions
 
-    #### Facilitating Cross-Chain and Multi-Asset Solutions:
+The proposed model aims to encourage innovation on Ethereum L2s by providing a flexible framework for token management.
+EVM rollups can experiment with this design to develop new paradigms in decentralized finance (DeFi), gaming, and
+beyond. By enabling tokens to have native properties and interactions, developers are empowered to explore features that
+could lead to more robust and versatile applications. This experimentation is vital for the evolution of the Ethereum
+ecosystem, as it fosters advancements that can benefit the broader community.
 
-      As the blockchain ecosystem grows increasingly interconnected, the ability to natively support multiple assets within the EVM positions Ethereum as a more versatile and integrative platform. This capability is crucial for enabling seamless cross-chain interactions and creating new financial products that leverage assets from multiple blockchains.
+## Prior Art
 
-  ### Improved Reliability via Consistent Asset Handling
-
-    By natively recognizing multiple assets within the EVM, Ethereum ensures consistent and reliable asset handling across all transactions and smart contract interactions. This standardization simplifies development, testing and auditing, leading to more secure and predictable outcomes.
+This EIP has been inspired by FuelVM's
+[Native Assets](https://docs.fuel.network/docs/sway/blockchain-development/native_assets/) design, as well as its
+[SRC-20: Native Asset](https://docs.fuel.network/docs/sway-standards/src-20-native-asset/) standard.
 
 ## Specification
 
-The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in RFC 2119 and RFC 8174.
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT
+RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in RFC 2119 and RFC 8174.
 
-A global `token_id` -> `token_supply` mapping is introduced to keep track of the existing NAs and their circulating supply. This mapping is also being used to validate the supported NAs (a NA is supported iff its id can be found in the mapping). The supply of a NA increases as a result of the `MINT` opcode execution - and decreases during the execution of its `BURN` counterparty. The `token_id` of a NA is the Ethereum address of its associated smart contract.
+For increased security and consistency, the token contracts representing the NTs SHOULD NOT use an upgradeability
+pattern.
 
-`ETH` becomes the "Base Asset", with both the ID and supply initialized to 0. `ETH` is the only NA the supply of which is not tracked explicitly (i.e. its supply is being determined just like it currently is).
+TODO: add limit about the maximum number of NTs allowed to be transferred in a single transaction
 
-The addition of new NAs is decided by consensus among the ETH validators. For security and consistency, the smart contracts representing the NAs MUST NOT be mutable/upgradeable. A smart contract MUST control its supply exclusively via the `MINT` and `BURN` opcodes to be considered for being added as a NA.
+### State Changes
+
+A global `token_id` -> `token_supply` mapping is introduced to keep track of the existing NTs and their circulating
+supply. This mapping is also used to validate the supported NTs. An NT exists if and only if its ID can be found in the
+mapping. The supply of an NT increases as a result of executing the `MINT` opcode, and decreases as a result of
+executing the `BURN` opcode. The `token_id` of an NT is the Ethereum address of its associated smart contract.
+
+`ETH` becomes the 'Base Asset', with its ID and supply initialized to zero. `ETH` is the only NT whose supply is not
+tracked explicitly, i.e., its supply is determined just like it currently is.
 
 ### New Opcodes
 
 #### `MINT` - `0xb0`
+
 - **Gas**: TBD
-
 - **Stack inputs**:
-  - `recipient` (Ethereum address that to which the minted assets are credited)
+  - `recipient`: the address to which the minted assets are credited
   - `amount`
-
 - **Stack outputs**:
-  - `success` (Boolean indicating success)
-
-Note: the asset that is being minted MUST be a NA.
+  - `success`: a Boolean indicating success
 
 #### `BURN` - `0xb1`
+
 - **Gas**: TBD
 - **Stack inputs**:
-  - `burner` (Ethereum address from which the assets burned)
+  - `burner`: the address from which the assets burned
   - `amount`
 - **Stack outputs**:
-  - `success` (Boolean indicating success)
+  - `success`: a Boolean indicating success
 
-Note: the burner MUST have a sufficient NA balance to cover the `amount`.
+Note: the burner MUST have an NT balance that is at least equal to `amount`.
 
-#### `BALANCES` - `0xb2`
-- **Gas**: Dynamic, proportional to the number of NAs owned by the queried account
+#### `BALANCEOF` - `0xb2`
+
 - **Stack inputs**:
-  - `account` (Ethereum address to query the NA balance of)
+  - `token_id`: the ID of the NT to query the balance of
+  - `address`: the address to query the balance of
 - **Stack outputs**:
-  - List of (`token_id`, `amount`) pairs representing the NAs balances of the account
+  - `balance`: the NT balance of the given address
+
+#### `CALLVALUES` - `0xb3`
+
+TODO
+
+#### `CALL2` - `0xb4`
+
+TODO
+
+Note: Since the Ethereum stack can support only up to 1024 elements, there is a natural limit on the number of tokens
+that can be transferred. A token pair takes 2 stack elements, so the maximum number of tokens that can be transferred in
+a single transaction is 512.
+
+#### `DELEGATECALL2` - `0xb5`
+
+TODO
+
+#### `CALLCODE2` - `0xb6`
+
+TODO
+
+#### `NTCREATE` - `0xb7`
+
+TODO
+
+#### `NTCREATE2` - `0xb8`
+
+TODO
 
 ### Existing Opcodes Adaptations
 
-#### `CALL`
-- **Gas**: Dynamic, proportional to the number of transferred NAs
-- **Stack inputs**:
-  - `value` is replaced by `values` which contains a list of (`token_id`, `amount`) pairs
+#### Balance Query
 
-#### `CALLCODE`
-- **Gas**: Dynamic, proportional to the number of transferred NAs
-- **Stack inputs**:
-  - `value` is replaced by `values` which contains a list of (`token_id`, `amount`) pairs
+The following opcodes are adapted to query the balance of the default NT, which is `ETH`:
 
-#### `CREATE`
-- **Gas**: Dynamic, proportional to the number of transferred NAs
-- **Stack inputs**:
-  - `value` is replaced by `values` which contains a list of (`token_id`, `amount`) pairs
+- `BALANCE`
+- `SELFBALANCE`
+- `CALLVALUE`
 
-#### `CREATE2`
-- **Gas**: Dynamic, proportional to the number of transferred NAs
-- **Stack inputs**:
-  - `value` is replaced by `values` which contains a list of (`token_id`, `amount`) pairs
+#### Contract Creation
 
-#### `BALANCE`
-- **Stack inputs**:
-  - `token_id` (the id of the NA the balance of which is being queried)
+The `value` field in the following opcodes will refer to the default NT, which is `ETH`:
 
-#### `SELFBALANCE`
-- **Name**: `SELFBALANCES`
-- **Gas**: Dynamic, proportional to the number of NAs owned by the executing account
-- **Stack outputs**:
-  - List of (token_id, amount) pairs representing the NAs held by the executing account.
+- `CREATE`
+- `CREATE2`
 
-#### `CALLVALUE`
-- **Name**: `CALLVALUES`
-- **Gas**: Dynamic, proportional to the number of NAs transferred by the executing CALL
-- **Stack outputs**:
-  - List of (token_id, amount) pairs representing the NAs transferred by the executing CALL
+#### Calling Contracts
+
+The `value` field in the following opcodes will refer to the default NT, which is `ETH`:
+
+- `CALL`
+- `CALLCODE`
+- `DELEGATECALL`
 
 ### Transaction structure
-The `value` field in the transaction structure is renamed to `transferred_assets`, and instead of a single value, now contains a list of (`token_id`, `amount`) pairs.
 
+#### New Transaction Types
+
+A new EIP-1559 transaction type is introduced to support the transfer of NTs.
+
+The `value` field in the transaction structure is renamed to `transferred_assets`, and instead of a single value, it now
+contains a list of (`token_id`, `token_amount`) pairs.
+
+#### EVM Transactions
+
+All existing EVM transactions are still valid.
+
+- A zero `value` is equivalent to an empty `transferred_assets` list.
+- A non-zero `value` is equivalent to a list containing a single pair with `ETH`'s `token_id` and the `value` as the
+  `token_amount`.
 
 ## Rationale
 
-An alternative to the proposed opcode-based approach was the Precompile-based approach, which presents the following advantages:
-  - No new opcodes would need to be introduced.
-  - Existing EVM opcodes would remain unchanged.
-  - As a result, no modifications to smart contract languages (that compile into EVM opcodes) would be required.
+An alternative to the proposed opcode-based approach was to use precompiles, which would have worked as follows:
 
-However, the Precompile-based approach also introduces several disadvantages:
-  - The minting, burning, transferring and balance checking of NAs would be more complicated for end users, as the complexity could not be abstracted through smart contract languages.
-  - Users would need to handle low-level data manipulations to encode inputs for Precompile functions and decode their outputs.
-  - Transferring NAs while calling contract functions would require encoding not only the NA data but also the function selector and the arguments for that function.
-  - Transferring multiple NAs in a single transaction would further complicate these operations.
+- No new opcodes.
+- Existing EVM opcodes would remain unchanged.
+- As a result, no modifications to smart contract languages would be required.
 
-Considering the balance of these pros and cons, the opcode-based approach was chosen for its simplicity and efficiency in handling NAs at the EVM level.
+However, the precompile-based approach also has disadvantages:
+
+- Users would be required to handle low-level data manipulations to encode inputs to precompile functions and decode
+  their outputs. This would lead to a subpar user experience.
+- It would require major architectural changes to the EVM implementation, as precompiles are not designed to be
+  stateful.
+
+Considering this, the opcode-based approach was chosen for its simplicity and efficiency in handling NTs at the EVM
+level.
 
 ## Backwards Compatibility
 
-The changes introduced by this EIP affect existing systems that rely on the `value` field in the transaction structure or any of the modified opcodes.
+This EIP does not introduce any breaking changes to the existing Ethereum protocol. However, it adds substantial new
+functionality that requires consideration across various layers of the ecosystem.
 
-Front-end Ethereum libraries (e.g. web3js, wagmi) need to adapt to the new transaction structure. At the same time, smart contract languages (e.g. Solidity, Vyper) need to adapt to the changed opcodes - and add support for the newly introduced opcodes. Ethereum wallets, explorers and development tools will require updates to support MNAs.
+Front-end Ethereum libraries, such as web3.js and wagmi, will need to adapt to the new transaction structures introduced
+by Multiple Native Tokens (MNTs). These libraries must update their interfaces and transaction handling mechanisms to
+accommodate the inclusion of token transfers within smart contract calls and the absence of traditional "approve" and
+"transfer" functions.
 
-The authors recommend providing extended development time and offering reference implementations to help ease the transition for developers of these tools and services.
+Smart contract languages like Solidity will need to incorporate support for the newly introduced opcodes associated with
+MNTs. This includes adapting compilers and development environments to recognize and compile contracts that interact
+with tokens stored in the VM state.
 
-## Test Cases
+Additionally, Ethereum wallets, block explorers, and development tools will require updates to fully support MNTs.
+Wallets must be capable of managing multiple native token balances, signing new types of transactions, and displaying
+token information accurately. Explorers need to parse and present the new transaction formats and token states, while
+development tools should facilitate debugging and deployment in this enhanced environment.
 
-<!--
-  This section is optional for non-Core EIPs.
+To ensure a smooth transition, the authors recommend a gradual deployment process. This phased approach allows
+developers, users, and infrastructure providers to adapt incrementally. By introducing MNTs in stages, the ecosystem can
+adjust to the new functionalities, verify compatibility, and address any issues that arise, ensuring that every
+component behaves correctly throughout the integration period.
 
-  The Test Cases section should include expected input/output pairs, but may include a succinct set of executable tests. It should not include project build files. No new requirements may be introduced here (meaning an implementation following only the Specification section should pass all tests here.)
-  If the test suite is too large to reasonably be included inline, then consider adding it as one or more files in `../assets/eip-####/`. External links will not be allowed
+## Reference Implementation
 
-  TODO: Remove this comment before submitting
--->
+TBD
 
 ## Security Considerations
 
-This EIP introduces several security risks related to gas handling, malicious assets and system integrity. Below are the key considerations and how they are mitigated.
+This EIP introduces a few security risks related to malicious tokens and system integrity. Below are the key
+considerations and how they are mitigated.
 
-1. Gas Accounting for NAs-related Opcodes
-Opcodes dealing with MNAs (e.g. `MINT`, `BURN`, `BALANCES`) must charge gas proportionate to the number of NAs involved. Otherwise, attackers could exploit the system by executing operations on many NAs, leading to potential DDoS attacks.
+1. **Malicious or Misbehaving Native Tokens**: a token that becomes a Native Token (NT) may later behave maliciously,
+   causing disruptions in the network.
 
-Mitigation: Gas costs are dynamically adjusted based on the number of processed NAs, ensuring that operations scale in cost alongside the transaction complexity.
+Mitigation: encourage users to prefer interacting with immutable, non-upgradeable NTs. Mitigation: A governance
+mechanism allows validators to vote on removing misbehaving NTs. Only immutable, non-upgradeable contracts can become
+NTs, reducing the risk of post-approval issues.
 
-2. Malicious or Misbehaving Native Assets
-An asset that becomes a Native Asset (NA) may later behave maliciously, causing disruptions in the network.
+2. **Cross-Contract NT Transfers**: inter-contract NTs transfers could lead to lost tokens if contracts are not properly
+   equipped to handle multiple tokens.
 
-Mitigation: A governance mechanism allows validators to vote on removing misbehaving NAs. Only immutable, non-upgradeable contracts can become NAs, reducing the risk of post-approval issues.
-
-3. Supply Control Risks
-The `MINT` and `BURN` opcodes introduce potential risks of improper asset creation or destruction, which could lead to inflation or deflation of an asset’s supply.
-
-Mitigation: Only the NAs are allowed to execute the `MINT` and `BURN` opcodes - and exclusively to control their own supply.
-
-4. Cross-Contract NA Transfers
-Inter-contract NAs transfers could lead to vulnerabilities if contracts are not properly equipped to handle multiple assets.
-
-Mitigation: Contracts must validate asset transfers correctly, with guidance for developers on standard patterns to ensure safe cross-contract interactions.
-
-5. Governance and Validator Consensus
-Validator voting on adding or removing NAs introduces potential risks of governance attacks or collusion.
-
-Mitigation: Safeguards such as quorum requirements and transparent voting processes will help prevent governance manipulation. Auditable records of decisions will ensure accountability.
+Mitigation: Contracts must validate token transfers correctly, with guidance for developers on standard patterns to
+ensure safe cross-contract interactions. Existing EVM contracts should be audited and updated to handle NTs.
 
 ## Copyright
 
