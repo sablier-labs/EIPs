@@ -1,7 +1,7 @@
 ---
 title: Multiple Native Tokens
 description:
-  Introduces Multiple Native Tokens, with balances stored in the global VM state and support for Native Token transfers in EVM
+  Introduces Multiple Native Tokens, with balances stored in the global VM state and support for transfers in EVM
   opcodes
 author: Paul Razvan Berg (@PaulRBerg), Iaroslav Mazur (@IaroslavMazur)
 discussions-to: https://ethereum-magicians.org[]
@@ -20,9 +20,9 @@ NTs) and foster innovation in L2s. The balances of these NTs are stored in the g
 the NTs while retaining its unique status of the only NT that can be used to pay for EVM gas. The `MINT`, `BURN`,
 `BALANCEOF`, and `CALLVALUES` opcodes are introduced to control the supply of NTs and query an account's NT balances.
 The `CALL2`, `DELEGATECALL2`, `CALLCODE2`, `NTCREATE`, `NTCREATE2` opcodes are introduced to handle the transfer of NTs
-and the NT-infused contract creation, respectively. Existing opcodes and transactions are adapted to refer to the default
-NT, which is `ETH`. A new transaction type is introduced in which the `value` field is replaced with a collection of
-(`token_id`, `token_amount`) pairs.
+and the NT-infused contract creation, respectively. Existing opcodes and transactions are adapted to refer to the
+default NT, which is `ETH`. A new transaction type is introduced in which the `value` field is replaced with a
+collection of (`token_id`, `token_amount`) pairs.
 
 ## Motivation
 
@@ -58,6 +58,9 @@ This EIP has been inspired by FuelVM's
 [Native Assets](https://docs.fuel.network/docs/sway/blockchain-development/native_assets/) design, as well as its
 [SRC-20: Native Asset](https://docs.fuel.network/docs/sway-standards/src-20-native-asset/) standard.
 
+The key distinction between Fuel's Native Assets and this EIP is that, in our proposal, each contract is limited to a
+single native token (NT). A contract can mint only one NT, and the contract's address itself serves as the NT's ID.
+
 ## Specification
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT
@@ -66,11 +69,14 @@ RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as de
 For increased security and consistency, the token contracts representing the NTs SHOULD NOT use an upgradeability
 pattern.
 
-Note: Since the EVM stack can support only up to 1024 elements, there is a natural limit to the number of tokens
-that can be transferred during the execution of a single opcode. Given that the total number of transferred tokens 
-takes 1 stack element, while each token pair takes 2 stack elements, the maximum number of tokens that can be 
-transferred by a single opcode can be calculated as follows:  (1024 - 1 - [NO_OF_NON_NT_TRANSFER_RELATED_OPCODE_ARGS]) 
-/ 2.
+Note: Since the EVM stack can support only up to 1024 elements, there is a natural limit to the number of tokens that
+can be transferred during the execution of a single opcode. Given that a token pair takes 2 stack elements and the
+number of transferred tokens need to be stored as a stack element, the maximum number of tokens that can be transferred
+can be calculated as follows:
+
+$$
+(1024 - 1 - [NON_NT_ARGS]) / 2
+$$
 
 For example, a single `NTCALL` opcode can transfer a total of (1024 - 1 - 6) / 2 = 508 tokens.
 
@@ -120,17 +126,19 @@ Note: the burner MUST have an NT balance that is at least equal to `amount`.
 - **Gas**: Dynamic, proportional to the number of NTs transferred by the executing call
 - **Stack inputs**: None
 - **Stack outputs**:
-  - `transferred_tokens_no`: the number of transferred tokens
-  - The list of `transferred_tokens_no` (`token_id`, `amount`) pairs
+  - `transferred_tokens_length`: the number of transferred tokens
+  - The list of `transferred_tokens_length` (`token_id`, `token_amount`) pairs
 
 #### `NTCALL` - `0xb4`
 
 - **Gas**: Dynamic, proportional to the number of transferred NTs
 - **Stack inputs**:
-  - `gas`: amount of gas to send to the sub context to execute. The gas that is not used by the sub context is returned to this one
+
+  - `gas`: amount of gas to send to the sub context to execute. The gas that is not used by the sub context is returned
+    to this one
   - `address`: the account which context to execute
-  - `transferred_tokens_no`: the number of transferred tokens
-  - The list of `transferred_tokens_no` (`token_id`, `amount`) pairs
+  - `transferred_tokens_length`: the number of transferred tokens
+  - The list of `transferred_tokens_length` (`token_id`, `token_amount`) pairs
   - `argsOffset`: byte offset in the memory in bytes, the calldata of the sub context
   - `argsSize`: byte size to copy (size of the calldata)
   - `retOffset`: byte offset in the memory in bytes, where to store the return data of the sub context
@@ -143,10 +151,12 @@ Note: the burner MUST have an NT balance that is at least equal to `amount`.
 
 - **Gas**: Dynamic, proportional to the number of transferred NTs
 - **Stack inputs**:
-  - `gas`: amount of gas to send to the sub context to execute. The gas that is not used by the sub context is returned to this one
+
+  - `gas`: amount of gas to send to the sub context to execute. The gas that is not used by the sub context is returned
+    to this one
   - `address`: the account which code to execute
-  - `transferred_tokens_no`: the number of transferred tokens
-  - The list of `transferred_tokens_no` (`token_id`, `amount`) pairs
+  - `transferred_tokens_length`: the number of transferred tokens
+  - The list of `transferred_tokens_length` (`token_id`, `token_amount`) pairs
   - `argsOffset`: byte offset in the memory in bytes, the calldata of the sub context
   - `argsSize`: byte size to copy (size of the calldata)
   - `retOffset`: byte offset in the memory in bytes, where to store the return data of the sub context
@@ -159,10 +169,11 @@ Note: the burner MUST have an NT balance that is at least equal to `amount`.
 
 - **Gas**: Dynamic, proportional to the number of transferred NTs
 - **Stack inputs**:
-  - `transferred_tokens_no`: the number of transferred tokens
-  - The list of `transferred_tokens_no` (`token_id`, `amount`) pairs
-  - `offset`: byte offset in the memory in bytes, the initialisation code for the new account
-  - `size`: byte size to copy (size of the initialisation code)
+
+  - `transferred_tokens_length`: the number of transferred tokens
+  - The list of `transferred_tokens_length` (`token_id`, `token_amount`) pairs
+  - `offset`: byte offset in the memory in bytes, the initialization code for the new account
+  - `size`: byte size to copy (size of the initialization code)
 
 - **Stack outputs**:
   - `address`: the address of the deployed contract, 0 if the deployment failed.
@@ -171,15 +182,15 @@ Note: the burner MUST have an NT balance that is at least equal to `amount`.
 
 - **Gas**: Dynamic, proportional to the number of transferred NTs
 - **Stack inputs**:
-  - `transferred_tokens_no`: the number of transferred tokens
-  - The list of `transferred_tokens_no` (`token_id`, `amount`) pairs
-  - `offset`: byte offset in the memory in bytes, the initialisation code of the new account
-  - `size`: byte size to copy (size of the initialisation code)
+
+  - `transferred_tokens_length`: the number of transferred tokens
+  - The list of `transferred_tokens_length` (`token_id`, `token_amount`) pairs
+  - `offset`: byte offset in the memory in bytes, the initialization code of the new account
+  - `size`: byte size to copy (size of the initialization code)
   - `salt`: 32-byte value used to create the new account at a deterministic address
 
 - **Stack outputs**:
   - `address`: the address of the deployed contract, 0 if the deployment failed
-
 
 ### Existing Opcodes Adaptations
 
@@ -211,16 +222,16 @@ The `value` field in the following opcodes will refer to the default NT, which i
 
 A new EIP-1559 transaction type is introduced to support the transfer of NTs.
 
-The `value` field in the transaction structure is replaced by the total number of transferred tokens 
-(`transferred_tokens_no`), followed by a list of `transferred_tokens_no` (`token_id`, `token_amount`) pairs.
+The `value` field in the transaction structure is replaced by the number of tokens transferred
+(`transferred_tokens_length`), followed by the (`token_id`, `token_amount`) pairs.
 
 #### EVM Transactions
 
 All existing EVM transactions are still valid.
 
 - A zero `value` is equivalent to an empty `transferred_tokens` list.
-- A non-zero `value` is equivalent to a list containing a single pair with `ETH`'s `token_id` and the `value` as the
-  `token_amount`.
+- A non-zero `value` is equivalent to a list containing a single pair with `ETH`'s `token_id` (which is zero) and the
+  `value` as `token_amount`.
 
 ## Rationale
 
