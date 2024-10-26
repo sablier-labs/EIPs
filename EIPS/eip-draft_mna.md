@@ -70,9 +70,9 @@ For increased security and consistency, the token contracts representing the NTs
 pattern.
 
 Note: Since the EVM stack can support only up to 1024 elements, there is a natural limit to the number of tokens that
-can be transferred during the execution of a single opcode. Given that a token pair takes 2 stack elements and the
-number of transferred tokens need to be stored as a stack element, the maximum number of tokens that can be transferred
-can be calculated as follows:
+can be transferred during the execution of a single opcode. Given that a token pair takes 2 stack slots, while the
+number of transferred tokens occupies another one, the maximum number of tokens that can be transferred can be
+calculated as follows:
 
 $$
 (1024 - 1 - [NON_NT_ARGS]) / 2
@@ -97,7 +97,7 @@ tracked explicitly, i.e., its supply is determined just like it currently is.
 - **Gas**: TBD
 - **Stack inputs**:
   - `recipient`: the address to which the minted tokens are credited
-  - `amount`
+  - `token_amount`
 - **Stack outputs**:
   - `success`: a Boolean indicating success
 
@@ -106,11 +106,11 @@ tracked explicitly, i.e., its supply is determined just like it currently is.
 - **Gas**: TBD
 - **Stack inputs**:
   - `burner`: the address from which the tokens are burned
-  - `amount`
+  - `token_amount`
 - **Stack outputs**:
   - `success`: a Boolean indicating success
 
-Note: the burner MUST have an NT balance that is at least equal to `amount`.
+Note: the burner MUST have an NT balance that is at least equal to `token_amount`.
 
 #### `BALANCEOF` - `0xb2`
 
