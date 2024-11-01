@@ -1,28 +1,27 @@
 ---
 title: Multiple Native Tokens
-description:
-  Introduces Multiple Native Tokens, with balances stored in the global VM state and support for transfers in EVM
-  opcodes
+description: Introduces fungible tokens with native-like properties directly within the EVM
 author: Paul Razvan Berg (@PaulRBerg), Iaroslav Mazur (@IaroslavMazur)
 discussions-to: https://ethereum-magicians.org[]
 status: Draft
 type: Standards Track
 category: Core
-created: TBD
+created: 2024-11-01
 ---
 
 ## Abstract
 
-This proposal introduces Multiple Native Tokens (MNTs, or just NTs) as a foundational extension to the Ethereum Virtual
-Machine (EVM), enabling a diverse range of tokens to function with native-like properties directly within the EVM.
-Unlike current ERC-20 implementations, MNTs are integrated into the global VM state, allowing for direct balance storage
-and transfer capabilities through the newly defined opcodes. This integration designates Ether (ETH) as one of the
-multiple native tokens, maintaining its unique role as the exclusive payment for EVM gas fees. The proposal introduces
-specific opcodes — such as `MINT`, `BURN`, `BALANCEOF`, `CALLVALUES` and `NTCALL` — for efficient token operations and
-enables direct handling of NT balances without intermediary contract layers. Additionally, this EIP outlines a new
-transaction format supporting MNT transfers within the transaction structure. By embedding MNT support natively in the
-EVM, this proposal aims to streamline token interactions, reduce gas costs and facilitate advanced use-cases,
-particularly on Layer 2 (L2) solutions, promoting more flexible, scalable and efficient decentralized applications.
+This proposal introduces Multiple Native Tokens (MNTs, or just NTs) as a foundational extension to the EVM, enabling
+fungible tokens to function with native-like properties directly within the EVM. Unlike current ERC-20 implementations,
+MNTs are integrated into the global VM state, allowing for direct transfers through newly defined opcodes and
+eliminating the traditional two-step "approve" and "transfer" pattern. Ether (ETH) is designated as one of the MNTs
+while retaining its unique role as the exclusive token for gas fee payments. The EIP introduces the new opcodes `MINT`,
+`BURN`, `BALANCEOF`, and `CALLVALUES` to manage NT supply and query account balances. Additional opcodes such as
+`NTCALL`, `NTCALLCODE`, `NTCREATE`, and `NTCREATE2` facilitate NT transfers and NT-infused contract creation. Existing
+opcodes and transactions are adapted to refer to the default NT, which is `ETH`. A new transaction type is introduced in
+which the `value` field is replaced with a collection of (`token_id`, `token_amount`) pairs, enabling multi-token
+transactions. By embedding tokens natively in the EVM, this proposal aims to improve the user experience of token
+management and facilitate advanced innovating use-cases, particularly on L2s.
 
 ## Motivation
 
@@ -75,8 +74,10 @@ number of transferred tokens occupies another one, the maximum number of tokens 
 calculated as follows:
 
 $$
-(1024 - 1 - [NON_NT_ARGS]) / 2
+(1024 - 1 - N) / 2
 $$
+
+Where $N$ is the number of non-NT-related arguments.
 
 For example, a single `NTCALL` opcode can transfer a total of (1024 - 1 - 6) / 2 = 508 tokens.
 
@@ -94,7 +95,7 @@ tracked explicitly, i.e., its supply is determined just like it currently is.
 
 #### `MINT` - `0xb0`
 
-- **Gas**: TBD
+- **Gas**: Constant
 - **Stack inputs**:
   - `recipient`: the address to which the minted tokens are credited
   - `token_amount`
@@ -103,7 +104,7 @@ tracked explicitly, i.e., its supply is determined just like it currently is.
 
 #### `BURN` - `0xb1`
 
-- **Gas**: TBD
+- **Gas**: Constant
 - **Stack inputs**:
   - `burner`: the address from which the tokens are burned
   - `token_amount`
@@ -114,7 +115,7 @@ Note: the burner MUST have an NT balance that is at least equal to `token_amount
 
 #### `BALANCEOF` - `0xb2`
 
-- **Gas**: TBD
+- **Gas**: Constant
 - **Stack inputs**:
   - `token_id`: the ID of the NT to query the balance of
   - `address`: the address to query the balance of
@@ -147,7 +148,7 @@ Note: the burner MUST have an NT balance that is at least equal to `token_amount
 - **Stack outputs**:
   - `success`: return 0 if the sub context reverted, 1 otherwise
 
-#### `NTCALLCODE` - `0xb6`
+#### `NTCALLCODE` - `0xb5`
 
 - **Gas**: Dynamic, proportional to the number of transferred NTs
 - **Stack inputs**:
@@ -165,7 +166,7 @@ Note: the burner MUST have an NT balance that is at least equal to `token_amount
 - **Stack outputs**:
   - `success`: return 0 if the sub context reverted, 1 otherwise
 
-#### `NTCREATE` - `0xb7`
+#### `NTCREATE` - `0xb6`
 
 - **Gas**: Dynamic, proportional to the number of transferred NTs
 - **Stack inputs**:
@@ -178,7 +179,7 @@ Note: the burner MUST have an NT balance that is at least equal to `token_amount
 - **Stack outputs**:
   - `address`: the address of the deployed contract, 0 if the deployment failed.
 
-#### `NTCREATE2` - `0xb8`
+#### `NTCREATE2` - `0xb7`
 
 - **Gas**: Dynamic, proportional to the number of transferred NTs
 - **Stack inputs**:
@@ -243,10 +244,10 @@ An alternative to the proposed opcode-based approach was to use precompiles, whi
 
 However, the precompile-based approach also has disadvantages:
 
-- Users would be required to handle low-level data manipulations to encode inputs to precompile functions and decode
-  their outputs. This would lead to a subpar user experience.
 - It would require major architectural changes to the EVM implementation, as precompiles are not designed to be
   stateful.
+- Users would be required to handle low-level data manipulations to encode inputs to precompile functions and decode
+  their outputs. This would lead to a subpar user experience.
 
 Considering this, the opcode-based approach was chosen for its simplicity and efficiency in handling NTs at the EVM
 level.
@@ -257,9 +258,8 @@ This EIP does not introduce any breaking changes to the existing Ethereum protoc
 functionality that requires consideration across various layers of the ecosystem.
 
 Front-end Ethereum libraries, such as web3.js and wagmi, will need to adapt to the new transaction structures introduced
-by Multiple Native Tokens (MNTs). These libraries must update their interfaces and transaction handling mechanisms to
-accommodate the inclusion of token transfers within smart contract calls and the absence of traditional "approve" and
-"transfer" functions.
+by MNTs. These libraries must update their interfaces and transaction handling mechanisms to accommodate the inclusion
+of token transfers within smart contract calls and the absence of traditional "approve" and "transfer" functions.
 
 Smart contract languages like Solidity will need to incorporate support for the newly introduced opcodes associated with
 MNTs. This includes adapting compilers and development environments to recognize and compile contracts that interact
@@ -277,7 +277,21 @@ component behaves correctly throughout the integration period.
 
 ## Reference Implementation
 
-TBD
+The authors have begun implementing this EIP in Sablier's [SabVM repository](https://github.com/sablier-labs/sabvm), a
+fork of [REVM](https://github.com/bluealloy/revm) that supports MNTs. Unlike the proposed EIP, SabVM uses precompiles
+instead of opcodes because that was easier to implement at the time.
+
+A particularly relevant resource in SabVM is this
+[draft Solidity spec](https://github.com/sablier-labs/sabvm/discussions/87), which details support for MNTs in Solidity.
+
+Additionally, the [SRFs repository](https://github.com/sablier-labs/SRFs) (Sablier Requests for Comments) hosts the
+SRF-20 standard: an application-level standard designed to replicate the ERC-20 standard specifically for MNTs.
+
+| Name   | Link                                                                     | Description                                                                       |
+| ------ | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| SabVM  | [github.com/sablier-labs/sabvm](https://github.com/sablier-labs/sabvm)   | Fork of REVM that implements MNTs with precompiles                                |
+| SRFs   | [github.com/sablier-labs/SRFs](https://github.com/sablier-labs/SRFs)     | Sablier Requests for Comments                                                     |
+| stdlib | [github.com/sablier-labs/stdlib](https://github.com/sablier-labs/stdlib) | Sablier Standard Library, providing precompiles, standards, and testing utilities |
 
 ## Security Considerations
 
@@ -287,15 +301,20 @@ considerations and how they are mitigated.
 1. **Malicious or Misbehaving Native Tokens**: a token that becomes a Native Token (NT) may later behave maliciously,
    causing disruptions in the network.
 
-Mitigation: encourage users to prefer interacting with immutable, non-upgradeable NTs. Mitigation: A governance
-mechanism allows validators to vote on removing misbehaving NTs. Only immutable, non-upgradeable contracts can become
-NTs, reducing the risk of post-approval issues.
+Mitigation: Users are encouraged to prefer using immutable, non-upgradeable NTs.
 
 2. **Cross-Contract NT Transfers**: inter-contract NTs transfers could lead to lost tokens if contracts are not properly
    equipped to handle multiple tokens.
 
 Mitigation: Contracts must validate token transfers correctly, with guidance for developers on standard patterns to
 ensure safe cross-contract interactions. Existing EVM contracts should be audited and updated to handle NTs.
+
+3. **Gas Bombs**: Users may become stuck if they hold an excessive number of NTs, causing the gas required for
+   processing their transactions to exceed the block gas limit.
+
+Mitigation: All introduced opcodes operate with constant-time complexity. The stack limit of 1024 elements effectively
+prevents the creation of gas bombs when calling contracts. Although an opcode for querying all NT balances of an account
+was initially considered, it was ultimately omitted to eliminate the risk of gas bomb exploits.
 
 ## Copyright
 
