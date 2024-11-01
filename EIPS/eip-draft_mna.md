@@ -13,16 +13,16 @@ created: TBD
 
 ## Abstract
 
-TODO: rewrite this at the end
-
-This EIP introduces significant changes to the EVM in order to make it recognize Multiple Native Tokens (MNTs, or just
-NTs) and foster innovation in L2s. The balances of these NTs are stored in the global VM state, and ETH becomes one of
-the NTs while retaining its unique status of the only NT that can be used to pay for EVM gas. The `MINT`, `BURN`,
-`BALANCEOF`, and `CALLVALUES` opcodes are introduced to control the supply of NTs and query an account's NT balances.
-The `CALL2`, `DELEGATECALL2`, `CALLCODE2`, `NTCREATE`, `NTCREATE2` opcodes are introduced to handle the transfer of NTs
-and the NT-infused contract creation, respectively. Existing opcodes and transactions are adapted to refer to the
-default NT, which is `ETH`. A new transaction type is introduced in which the `value` field is replaced with a
-collection of (`token_id`, `token_amount`) pairs.
+This proposal introduces Multiple Native Tokens (MNTs, or just NTs) as a foundational extension to the Ethereum Virtual
+Machine (EVM), enabling a diverse range of tokens to function with native-like properties directly within the EVM.
+Unlike current ERC-20 implementations, MNTs are integrated into the global VM state, allowing for direct balance storage
+and transfer capabilities through the newly defined opcodes. This integration designates Ether (ETH) as one of the
+multiple native tokens, maintaining its unique role as the exclusive payment for EVM gas fees. The proposal introduces
+specific opcodes — such as `MINT`, `BURN`, `BALANCEOF`, `CALLVALUES` and `NTCALL` — for efficient token operations and
+enables direct handling of NT balances without intermediary contract layers. Additionally, this EIP outlines a new
+transaction format supporting MNT transfers within the transaction structure. By embedding MNT support natively in the
+EVM, this proposal aims to streamline token interactions, reduce gas costs and facilitate advanced use-cases,
+particularly on Layer 2 (L2) solutions, promoting more flexible, scalable and efficient decentralized applications.
 
 ## Motivation
 
